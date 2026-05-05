@@ -43,3 +43,24 @@ def github_callback(data: GithubCallbackRequest, db: Session = Depends(get_db)):
 
     db.commit()
     return {"status": "ok"}
+
+
+
+@router.get("/auth/token/{email}")
+def get_token(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    token = db.query(ProviderToken).filter(
+        ProviderToken.user_id == user.id,
+        ProviderToken.provider == "github"
+    ).first()
+    
+    if not token:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Token not found")
+    
+    return {"access_token": token.access_token, "provider": token.provider}

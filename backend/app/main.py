@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from app.database import engine, Base
 from app.models import User, ProviderToken
 from app.routers.auth import router as auth_router
+from app.routers.github import router as github_router
+from app.routers.agent import router as agent_router
 
 load_dotenv()
 
@@ -18,6 +20,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(github_router)
+app.include_router(agent_router)
 
 @app.on_event("startup")
 def startup():
