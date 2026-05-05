@@ -39,14 +39,19 @@ def make_orchestrator_tools(github_token: str, gmail_token: str, gmail_refresh_t
 
     @tool
     def get_github_repos() -> str:
-        """Get all GitHub repositories for the user"""
+        """Get all GitHub repositories for the user. Returns repo names and owner username."""
         response = requests.get(
             "https://api.github.com/user/repos",
             headers={"Authorization": f"Bearer {github_token}"}
         )
+        user_response = requests.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {github_token}"}
+        )
+        username = user_response.json().get("login", "unknown")
         repos = [r["name"] for r in response.json()]
-        return f"GitHub repos: {', '.join(repos)}"
-
+        return f"GitHub username: {username}\nRepositories: {', '.join(repos)}"
+        
     @tool
     def get_github_issues(repo_name: str) -> str:
         """Get open issues for a GitHub repository"""
@@ -61,15 +66,23 @@ def make_orchestrator_tools(github_token: str, gmail_token: str, gmail_refresh_t
 
     @tool
     def create_github_issue(repo_name: str, title: str, body: str) -> str:
-        """Create a new issue in a GitHub repository"""
+        """Create a new issue in a GitHub repository. Use the exact repo name from get_github_repos."""
+        user_response = requests.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {github_token}"}
+        )
+        username = user_response.json().get("login")
+        if not username:
+            return "Could not determine GitHub username"
+
         response = requests.post(
-            f"https://api.github.com/repos/danieldeda2/{repo_name}/issues",
+            f"https://api.github.com/repos/{username}/{repo_name}/issues",
             headers={"Authorization": f"Bearer {github_token}"},
             json={"title": title, "body": body}
         )
         if response.status_code == 201:
             return f"Issue created: {response.json()['html_url']}"
-        return f"Failed to create issue: {response.text}"
+        return f"Failed to create issue: {response.status_code} {response.text}"
 
     
     @tool
@@ -155,7 +168,10 @@ def run_orchestrator(github_token: str, gmail_token: str, gmail_refresh_token: s
         last_message = state["messages"][-1]
         tool_messages = []
         for tool_call in last_message.tool_calls:
-            result = tool_map[tool_call["name"]].invoke(tool_call["args"])
+            try:
+                result = tool_map[tool_call["name"]].invoke(tool_call["args"])
+            except Exception as e:
+                result = f"Tool '{tool_call['name']}' failed: {str(e)}. This service may need to be reconnected."
             tool_messages.append(
                 ToolMessage(content=result, tool_call_id=tool_call["id"])
             )

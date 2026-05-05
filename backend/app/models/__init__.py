@@ -15,6 +15,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tokens = relationship("ProviderToken", back_populates="user")
+    connected_accounts = relationship("ConnectedAccount", back_populates="user")
 
 
 class ProviderToken(Base):
@@ -29,3 +30,15 @@ class ProviderToken(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="tokens")
+
+
+class ConnectedAccount(Base):
+    __tablename__ = "connected_accounts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    master_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    provider = Column(String, nullable=False)
+    provider_email = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="connected_accounts")

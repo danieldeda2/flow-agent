@@ -1,58 +1,107 @@
 "use client"
 import { useSession, signIn } from "next-auth/react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Sidebar from "./components/Sidebar"
 import ChatWindow, { Message } from "./components/ChatWindow"
 import MessageInput from "./components/MessageInput"
+
+interface ConnectedAccounts {
+  github?: string
+  google?: string
+  slack?: string
+  master?: string
+}
 
 export default function Home() {
   const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccounts>({})
 
-  const handleSend = async (content: string) => {
-    if (!session?.user?.email) return
-
-    const userMessage: Message = {
-      role: "user",
-      content,
-      timestamp: new Date(),
+  useEffect(() => {
+    if (session?.user?.email) {
+      fetchConnectedAccounts()
     }
+  }, [session])
 
-    setMessages(prev => [...prev, userMessage])
-    setLoading(true)
-
+  const fetchConnectedAccounts = async () => {
     try {
-      const res = await fetch("http://localhost:8000/agent/orchestrate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          github_email: "danieldeda165@gmail.com",
-          gmail_email: "danieldeda302@gmail.com",
-          slack_email: "U0B16UWG1QF@slack.local",
-          message: content,
-        }),
-      })
-
-      const data = await res.json()
-
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: data.response || "Something went wrong.",
-        timestamp: new Date(),
+      const res = await fetch(
+        `http://localhost:8000/auth/connected/${encodeURIComponent(session!.user!.email!)}`
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setConnectedAccounts(data)
       }
-
-      setMessages(prev => [...prev, assistantMessage])
     } catch (err) {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "Failed to reach the server. Make sure the backend is running.",
-        timestamp: new Date(),
-      }])
-    } finally {
-      setLoading(false)
+      console.error("Failed to fetch connected accounts", err)
     }
   }
+
+  const handleSend = async (content: string) => {
+  if (!session?.user?.email) return
+
+  const missingServices = []
+  if (!connectedAccounts.github) missingServices.push("GitHub")
+  if (!connectedAccounts.google) missingServices.push("Gmail")
+  if (!connectedAccounts.slack) missingServices.push("Slack")
+
+  const userMessage: Message = {
+    role: "user",
+    content,
+    timestamp: new Date(),
+  }
+
+  setMessages(prev => [...prev, userMessage])
+
+  if (missingServices.length === 3) {
+    setMessages(prev => [...prev, {
+      role: "assistant",
+      content: "You haven't connected any services yet. Connect GitHub, Gmail, or Slack from the sidebar to get started.",
+      timestamp: new Date(),
+    }])
+    return
+  }
+
+  if (missingServices.length > 0) {
+    setMessages(prev => [...prev, {
+      role: "assistant",
+      content: `Note: ${missingServices.join(", ")} ${missingServices.length === 1 ? "is" : "are"} not connected. I'll do my best with the services you have connected.`,
+      timestamp: new Date(),
+    }])
+  }
+
+  setLoading(true)
+
+  try {
+    const res = await fetch("http://localhost:8000/agent/orchestrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        github_email: connectedAccounts.github || session.user.email,
+        gmail_email: connectedAccounts.google || session.user.email,
+        slack_email: connectedAccounts.slack || session.user.email,
+        message: content,
+      }),
+    })
+
+    const data = await res.json()
+
+    setMessages(prev => [...prev, {
+      role: "assistant",
+      content: data.response || "Something went wrong.",
+      timestamp: new Date(),
+    }])
+  } catch (err) {
+    setMessages(prev => [...prev, {
+      role: "assistant",
+      content: "Failed to reach the server. Make sure the backend is running.",
+      timestamp: new Date(),
+    }])
+  } finally {
+    setLoading(false)
+  }
+}
 
   if (!session) {
     return (

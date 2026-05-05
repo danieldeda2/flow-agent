@@ -72,7 +72,6 @@ export default function MessageInput({ onSend, disabled }: {
             fontSize: "14px",
             fontFamily: "var(--font-sans)",
             lineHeight: "1.6",
-            placeholder: "var(--text-muted)",
             minHeight: "24px",
             maxHeight: "160px",
             overflowY: "auto",

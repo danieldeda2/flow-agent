@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, ProviderToken
+from app.models import User, ProviderToken, ConnectedAccount
 from pydantic import BaseModel
 from typing import Optional
 
@@ -14,6 +14,7 @@ class CallbackRequest(BaseModel):
     access_token: str
     refresh_token: Optional[str]
     provider: str
+    master_email: Optional[str] = None
 
 @router.post("/auth/callback")
 async def auth_callback(request: Request, db: Session = Depends(get_db)):
@@ -22,7 +23,6 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
     
     email = data.get("email")
     if not email:
-        print("NO EMAIL FOUND IN:", data)
         return {"status": "error", "detail": "no email"}
 
     user = db.query(User).filter(User.email == email).first()
@@ -73,3 +73,17 @@ def get_token(email: str, provider: str, db: Session = Depends(get_db)):
         "refresh_token": token.refresh_token,
         "provider": token.provider
     }
+
+@router.get("/auth/connected/{master_email}")
+def get_connected_accounts(master_email: str, db: Session = Depends(get_db)):
+    master_user = db.query(User).filter(User.email == master_email).first()
+    if not master_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    accounts = db.query(ConnectedAccount).filter(
+        ConnectedAccount.master_user_id == master_user.id
+    ).all()
+
+    result = {a.provider: a.provider_email for a in accounts}
+    result["master"] = master_email
+    return result
