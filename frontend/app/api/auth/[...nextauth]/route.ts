@@ -9,14 +9,31 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
-    async session({ session, token }) {
-      return session
+    async signIn({ user, account }) {
+      try {
+        await fetch("http://localhost:8000/auth/github/callback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: user.email,
+            name: user.name,
+            avatar_url: user.image,
+            access_token: account?.access_token,
+          }),
+        })
+      } catch (error) {
+        console.error("Failed to sync user to backend:", error)
+      }
+      return true
     },
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token
       }
       return token
+    },
+    async session({ session, token }) {
+      return session
     },
   },
 })
