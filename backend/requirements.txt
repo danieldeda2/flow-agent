@@ -12,3 +12,4 @@ langchain-anthropic
 google-auth
 google-auth-oauthlib
 google-api-python-client
+slack-sdk

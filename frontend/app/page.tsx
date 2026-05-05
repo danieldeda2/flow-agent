@@ -9,6 +9,9 @@ export default function Home() {
       <div>
         <p>Signed in as {session.user?.email}</p>
         <button onClick={() => signOut()}>Sign out</button>
+        <a href="http://localhost:8000/slack/connect">
+          <button>Connect Slack</button>
+        </a>
       </div>
     )
   }

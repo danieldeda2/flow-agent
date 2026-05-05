@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, ProviderToken
@@ -16,32 +16,39 @@ class CallbackRequest(BaseModel):
     provider: str
 
 @router.post("/auth/callback")
-def auth_callback(data: CallbackRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
+async def auth_callback(request: Request, db: Session = Depends(get_db)):
+    data = await request.json()
+    print("AUTH CALLBACK DATA:", data)
+    
+    email = data.get("email")
+    if not email:
+        print("NO EMAIL FOUND IN:", data)
+        return {"status": "error", "detail": "no email"}
 
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         user = User(
-            email=data.email,
-            name=data.name,
-            avatar_url=data.avatar_url
+            email=email,
+            name=data.get("name"),
+            avatar_url=data.get("avatar_url")
         )
         db.add(user)
         db.flush()
 
     token = db.query(ProviderToken).filter(
         ProviderToken.user_id == user.id,
-        ProviderToken.provider == data.provider
+        ProviderToken.provider == data.get("provider")
     ).first()
 
     if token:
-        token.access_token = data.access_token
-        token.refresh_token = data.refresh_token
+        token.access_token = data.get("access_token")
+        token.refresh_token = data.get("refresh_token")
     else:
         token = ProviderToken(
             user_id=user.id,
-            provider=data.provider,
-            access_token=data.access_token,
-            refresh_token=data.refresh_token
+            provider=data.get("provider"),
+            access_token=data.get("access_token"),
+            refresh_token=data.get("refresh_token")
         )
         db.add(token)
 

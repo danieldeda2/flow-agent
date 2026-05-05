@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import User, ProviderToken
 from app.agents.github_agent import run_agent as run_github_agent
 from app.agents.gmail_agent import run_gmail_agent
+from app.agents.slack_agent import run_slack_agent
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -30,6 +31,8 @@ def run_agent_endpoint(request: AgentRequest, db: Session = Depends(get_db)):
         response = run_github_agent(token.access_token, request.message)
     elif request.provider == "google":
         response = run_gmail_agent(token.access_token, token.refresh_token, request.message)
+    elif request.provider == "slack":
+        response = run_slack_agent(token.access_token, request.message)
     else:
         raise HTTPException(status_code=400, detail="Unsupported provider")
 
