@@ -71,9 +71,10 @@ def make_orchestrator_tools(github_token: str, gmail_token: str, gmail_refresh_t
             return f"Issue created: {response.json()['html_url']}"
         return f"Failed to create issue: {response.text}"
 
+    
     @tool
     def get_unread_emails() -> str:
-        """Get unread emails from Gmail"""
+        """Get unread emails from Gmail. Returns message IDs and metadata."""
         service = get_gmail_service(gmail_token, gmail_refresh_token)
         results = service.users().messages().list(
             userId="me", q="is:unread", maxResults=10
@@ -88,12 +89,12 @@ def make_orchestrator_tools(github_token: str, gmail_token: str, gmail_refresh_t
                 metadataHeaders=["From", "Subject"]
             ).execute()
             headers = {h["name"]: h["value"] for h in detail["payload"]["headers"]}
-            emails.append(f"From: {headers.get('From')} | Subject: {headers.get('Subject')}")
+            emails.append(f"MESSAGE_ID={msg['id']} | From: {headers.get('From')} | Subject: {headers.get('Subject')}")
         return "\n".join(emails)
 
     @tool
     def get_email_body(message_id: str) -> str:
-        """Get the full body of a specific email"""
+        """Get the full body of a specific email. message_id must be the Gmail MESSAGE_ID value from get_unread_emails, NOT an email address."""
         service = get_gmail_service(gmail_token, gmail_refresh_token)
         detail = service.users().messages().get(
             userId="me", id=message_id, format="full"
