@@ -33,8 +33,6 @@ def slack_callback(code: str, db: Session = Depends(get_db)):
     })
 
     data = response.json()
-    print("SLACK OAUTH RESPONSE:", data)
-
     if not data.get("ok"):
         return {"error": data.get("error")}
 
@@ -47,12 +45,11 @@ def slack_callback(code: str, db: Session = Depends(get_db)):
         params={"user": slack_user_id}
     ).json()
 
-    print("SLACK USER INFO:", user_info)
-
     slack_user = user_info.get("user", {})
-    email = slack_user.get("profile", {}).get("email", f"{slack_user_id}@slack.local")
+    profile = slack_user.get("profile", {})
+    email = profile.get("email") or f"{slack_user_id}@slack.local"
     name = slack_user.get("real_name", slack_user_id)
-    avatar = slack_user.get("profile", {}).get("image_48", "")
+    avatar = profile.get("image_48", "")
 
     user = db.query(User).filter(User.email == email).first()
     if not user:
