@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, ProviderToken
-from app.agents.github_agent import run_agent
+from app.agents.github_agent import run_agent as run_github_agent
+from app.agents.gmail_agent import run_gmail_agent
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -10,6 +11,7 @@ router = APIRouter()
 class AgentRequest(BaseModel):
     email: str
     message: str
+    provider: str = "github"
 
 @router.post("/agent/run")
 def run_agent_endpoint(request: AgentRequest, db: Session = Depends(get_db)):
@@ -19,10 +21,16 @@ def run_agent_endpoint(request: AgentRequest, db: Session = Depends(get_db)):
 
     token = db.query(ProviderToken).filter(
         ProviderToken.user_id == user.id,
-        ProviderToken.provider == "github"
+        ProviderToken.provider == request.provider
     ).first()
     if not token:
-        raise HTTPException(status_code=404, detail="GitHub token not found")
+        raise HTTPException(status_code=404, detail=f"{request.provider} token not found")
 
-    response = run_agent(token.access_token, request.message)
+    if request.provider == "github":
+        response = run_github_agent(token.access_token, request.message)
+    elif request.provider == "google":
+        response = run_gmail_agent(token.access_token, token.refresh_token, request.message)
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported provider")
+
     return {"response": response}
