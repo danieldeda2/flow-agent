@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, ProviderToken
@@ -7,16 +7,18 @@ from typing import Optional
 
 router = APIRouter()
 
-class GithubCallbackRequest(BaseModel):
+class CallbackRequest(BaseModel):
     email: str
     name: Optional[str]
     avatar_url: Optional[str]
     access_token: str
+    refresh_token: Optional[str]
+    provider: str
 
-@router.post("/auth/github/callback")
-def github_callback(data: GithubCallbackRequest, db: Session = Depends(get_db)):
+@router.post("/auth/callback")
+def auth_callback(data: CallbackRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
-    
+
     if not user:
         user = User(
             email=data.email,
@@ -28,39 +30,39 @@ def github_callback(data: GithubCallbackRequest, db: Session = Depends(get_db)):
 
     token = db.query(ProviderToken).filter(
         ProviderToken.user_id == user.id,
-        ProviderToken.provider == "github"
+        ProviderToken.provider == data.provider
     ).first()
 
     if token:
         token.access_token = data.access_token
+        token.refresh_token = data.refresh_token
     else:
         token = ProviderToken(
             user_id=user.id,
-            provider="github",
-            access_token=data.access_token
+            provider=data.provider,
+            access_token=data.access_token,
+            refresh_token=data.refresh_token
         )
         db.add(token)
 
     db.commit()
     return {"status": "ok"}
 
-
-
-@router.get("/auth/token/{email}")
-def get_token(email: str, db: Session = Depends(get_db)):
+@router.get("/auth/token/{email}/{provider}")
+def get_token(email: str, provider: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
-    
     if not user:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     token = db.query(ProviderToken).filter(
         ProviderToken.user_id == user.id,
-        ProviderToken.provider == "github"
+        ProviderToken.provider == provider
     ).first()
-    
     if not token:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Token not found")
-    
-    return {"access_token": token.access_token, "provider": token.provider}
+
+    return {
+        "access_token": token.access_token,
+        "refresh_token": token.refresh_token,
+        "provider": token.provider
+    }

@@ -16,6 +16,7 @@ export default function Home() {
   return (
     <div>
       <button onClick={() => signIn("github")}>Sign in with GitHub</button>
+      <button onClick={() => signIn("google")}>Sign in with Google</button>
     </div>
   )
 }
