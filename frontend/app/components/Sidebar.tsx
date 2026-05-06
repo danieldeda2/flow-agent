@@ -204,7 +204,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       <div style={{
         borderTop: "1px solid var(--border)",
         paddingTop: "14px",
-        paddingBottom: "env(safe-area-inset-bottom, 16px)",
+        paddingBottom: "calc(env(safe-area-inset-bottom, 16px) + 30px)",        
         display: "flex",
         flexDirection: "column",
         gap: "8px",
