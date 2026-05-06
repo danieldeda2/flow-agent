@@ -85,7 +85,7 @@ export default function Home() {
   if (!session) {
     return (
       <div style={{
-        height: "100vh",
+        height: "100svh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -140,7 +140,7 @@ export default function Home() {
   return (
     <div style={{
       display: "flex",
-      height: "100vh",
+      height: "100svh",
       background: "var(--bg-base)",
       overflow: "hidden",
     }}>
@@ -176,7 +176,6 @@ export default function Home() {
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
-            {/* Mobile menu button */}
             <button
               className="mobile-header-btn"
               onClick={() => setSidebarOpen(true)}

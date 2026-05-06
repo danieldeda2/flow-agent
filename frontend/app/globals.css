@@ -36,6 +36,7 @@
 
 html, body {
   height: 100%;
+  height: -webkit-fill-available;
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-sans);
