@@ -97,4 +97,7 @@ def slack_callback(code: str, state: str, db: Session = Depends(get_db)):
         db.add(connected)
 
     db.commit()
-    return RedirectResponse(f"{os.getenv('FRONTEND_URL')}?slack=connected")
+    
+    frontend_url = os.getenv('FRONTEND_URL')
+    print(f"FRONTEND_URL: {frontend_url}")
+    return RedirectResponse(f"{frontend_url}?slack=connected")
