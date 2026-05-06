@@ -1,6 +1,5 @@
 import NextAuth from "next-auth"
 import GithubProvider from "next-auth/providers/github"
-import GoogleProvider from "next-auth/providers/google"
 
 const handler = NextAuth({
   providers: [
@@ -65,7 +64,7 @@ const handler = NextAuth({
   callbacks: {
     async signIn({ user, account }) {
       try {
-        await fetch("http://localhost:8000/auth/callback", {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/callback`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

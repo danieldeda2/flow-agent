@@ -29,7 +29,7 @@ export default function Home() {
   const fetchConnectedAccounts = async () => {
     try {
       const res = await fetch(
-        `http://localhost:8000/auth/connected/${encodeURIComponent(session!.user!.email!)}`
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/connected/${encodeURIComponent(session!.user!.email!)}`
       )
       if (res.ok) {
         const data = await res.json()
@@ -53,7 +53,7 @@ export default function Home() {
     setLoading(true)
 
     try {
-      const res = await fetch("http://localhost:8000/agent/orchestrate", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agent/orchestrate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -45,7 +45,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
     try {
       const res = await fetch(
-        `http://localhost:8000/auth/connected/${encodeURIComponent(email)}`
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/connected/${encodeURIComponent(email)}`
       )
       if (res.ok) {
         const data = await res.json()
@@ -66,7 +66,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
     if (!email) return
     try {
       await fetch(
-        `http://localhost:8000/auth/disconnect/${encodeURIComponent(email)}/${provider}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/disconnect/${encodeURIComponent(email)}/${provider}`,
         { method: "DELETE" }
       )
       setServices(prev => ({
@@ -185,7 +185,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           description="Email & inbox"
           service={services.google}
           loading={loading}
-          onConnect={() => window.location.href = `http://localhost:8000/google/connect?master_email=${encodeURIComponent(session?.user?.email || "")}`}          onDisconnect={() => handleDisconnect("google")}
+          onConnect={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/google/connect?master_email=${encodeURIComponent(session?.user?.email || "")}`}          onDisconnect={() => handleDisconnect("google")}
         />
         <ServiceCard
           icon={<SlackIcon />}
@@ -193,7 +193,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           description="Channels & messages"
           service={services.slack}
           loading={loading}
-          onConnect={() => window.location.href = `http://localhost:8000/slack/connect?master_email=${encodeURIComponent(session?.user?.email || "")}`}
+          onConnect={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/slack/connect?master_email=${encodeURIComponent(session?.user?.email || "")}`}
           onDisconnect={() => handleDisconnect("slack")}
         />
       </div>
