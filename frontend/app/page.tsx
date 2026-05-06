@@ -181,7 +181,7 @@ export default function Home() {
               className="mobile-header-btn"
               onClick={() => setSidebarOpen(true)}
               style={{
-                display: "none",
+                display: "flex",
                 width: "32px", height: "32px",
                 background: "var(--bg-elevated)",
                 border: "1px solid var(--border)",
