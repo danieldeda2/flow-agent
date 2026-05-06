@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useRef } from "react"
+import ReactMarkdown from "react-markdown"
 
 export interface Message {
   role: "user" | "assistant"
@@ -7,9 +8,10 @@ export interface Message {
   timestamp: Date
 }
 
-export default function ChatWindow({ messages, loading }: {
+export default function ChatWindow({ messages, loading, onSuggestionClick }: {
   messages: Message[]
   loading: boolean
+  onSuggestionClick: (text: string) => void
 }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -26,22 +28,17 @@ export default function ChatWindow({ messages, loading }: {
       flexDirection: "column",
       gap: "24px",
     }}>
-      {messages.length === 0 && !loading && (
-        <EmptyState />
-      )}
-
+      {messages.length === 0 && !loading && <EmptyState onSuggestionClick={onSuggestionClick} />}
       {messages.map((msg, i) => (
         <MessageBubble key={i} message={msg} />
       ))}
-
       {loading && <TypingIndicator />}
-
       <div ref={bottomRef} />
     </div>
   )
 }
 
-function EmptyState() {
+function EmptyState({ onSuggestionClick }: { onSuggestionClick: (text: string) => void }) {
   const suggestions = [
     "What are my unread emails?",
     "Show me my GitHub repositories",
@@ -93,27 +90,29 @@ function EmptyState() {
         maxWidth: "480px",
       }}>
         {suggestions.map((s, i) => (
-          <div key={i} style={{
-            padding: "12px 14px",
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-md)",
-            fontSize: "13px",
-            color: "var(--text-secondary)",
-            cursor: "pointer",
-            transition: "all var(--transition)",
-            lineHeight: "1.4",
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent-glow)"
-            ;(e.currentTarget as HTMLDivElement).style.color = "var(--text-primary)"
-            ;(e.currentTarget as HTMLDivElement).style.background = "var(--bg-elevated)"
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"
-            ;(e.currentTarget as HTMLDivElement).style.color = "var(--text-secondary)"
-            ;(e.currentTarget as HTMLDivElement).style.background = "var(--bg-surface)"
-          }}>
+          <div key={i}
+            onClick={() => onSuggestionClick(s)}
+            style={{
+              padding: "12px 14px",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-md)",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              transition: "all var(--transition)",
+              lineHeight: "1.4",
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent-glow)"
+              ;(e.currentTarget as HTMLDivElement).style.color = "var(--text-primary)"
+              ;(e.currentTarget as HTMLDivElement).style.background = "var(--bg-elevated)"
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"
+              ;(e.currentTarget as HTMLDivElement).style.color = "var(--text-secondary)"
+              ;(e.currentTarget as HTMLDivElement).style.background = "var(--bg-surface)"
+            }}>
             {s}
           </div>
         ))}
@@ -170,10 +169,36 @@ function MessageBubble({ message }: { message: Message }) {
         fontSize: "14px",
         lineHeight: "1.7",
         color: isUser ? "white" : "var(--text-primary)",
-        whiteSpace: "pre-wrap",
         wordBreak: "break-word",
       }}>
-        {message.content}
+        {isUser ? (
+          <span style={{ whiteSpace: "pre-wrap" }}>{message.content}</span>
+        ) : (
+          <div className="markdown-body">
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => <h1 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px", color: "var(--text-primary)" }}>{children}</h1>,
+                h2: ({ children }) => <h2 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "6px", color: "var(--text-primary)" }}>{children}</h2>,
+                h3: ({ children }) => <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "4px", color: "var(--text-primary)" }}>{children}</h3>,
+                p: ({ children }) => <p style={{ marginBottom: "8px", lineHeight: "1.7" }}>{children}</p>,
+                ul: ({ children }) => <ul style={{ paddingLeft: "18px", marginBottom: "8px" }}>{children}</ul>,
+                ol: ({ children }) => <ol style={{ paddingLeft: "18px", marginBottom: "8px" }}>{children}</ol>,
+                li: ({ children }) => <li style={{ marginBottom: "4px", lineHeight: "1.6" }}>{children}</li>,
+                strong: ({ children }) => <strong style={{ fontWeight: "600", color: "var(--text-primary)" }}>{children}</strong>,
+                em: ({ children }) => <em style={{ fontStyle: "italic" }}>{children}</em>,
+                code: ({ children }) => <code style={{ fontFamily: "var(--font-mono)", fontSize: "12px", background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px", color: "var(--accent)" }}>{children}</code>,
+                pre: ({ children }) => <pre style={{ fontFamily: "var(--font-mono)", fontSize: "12px", background: "var(--bg-elevated)", padding: "12px", borderRadius: "8px", overflowX: "auto", marginBottom: "8px" }}>{children}</pre>,
+                hr: () => <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "12px 0" }} />,
+                a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>{children}</a>,
+                table: ({ children }) => <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "8px", fontSize: "13px" }}>{children}</table>,
+                th: ({ children }) => <th style={{ padding: "6px 12px", borderBottom: "1px solid var(--border)", textAlign: "left", fontWeight: "600", color: "var(--text-secondary)" }}>{children}</th>,
+                td: ({ children }) => <td style={{ padding: "6px 12px", borderBottom: "1px solid var(--border-subtle)" }}>{children}</td>,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
     </div>
   )

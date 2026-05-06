@@ -1,17 +1,18 @@
 "use client"
-import { useState, useRef, KeyboardEvent } from "react"
+import { useRef, KeyboardEvent } from "react"
 
-export default function MessageInput({ onSend, disabled }: {
+export default function MessageInput({ onSend, disabled, value, onChange }: {
   onSend: (message: string) => void
   disabled: boolean
+  value: string
+  onChange: (val: string) => void
 }) {
-  const [value, setValue] = useState("")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const handleSend = () => {
     if (!value.trim() || disabled) return
     onSend(value.trim())
-    setValue("")
+    onChange("")
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
     }
@@ -56,7 +57,7 @@ export default function MessageInput({ onSend, disabled }: {
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={e => setValue(e.target.value)}
+          onChange={e => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
           placeholder="Ask anything about your GitHub, Gmail, or Slack..."

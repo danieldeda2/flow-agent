@@ -17,6 +17,8 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccounts>({})
+  const [inputValue, setInputValue] = useState("")
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -39,69 +41,46 @@ export default function Home() {
   }
 
   const handleSend = async (content: string) => {
-  if (!session?.user?.email) return
+    if (!session?.user?.email) return
 
-  const missingServices = []
-  if (!connectedAccounts.github) missingServices.push("GitHub")
-  if (!connectedAccounts.google) missingServices.push("Gmail")
-  if (!connectedAccounts.slack) missingServices.push("Slack")
-
-  const userMessage: Message = {
-    role: "user",
-    content,
-    timestamp: new Date(),
-  }
-
-  setMessages(prev => [...prev, userMessage])
-
-  if (missingServices.length === 3) {
-    setMessages(prev => [...prev, {
-      role: "assistant",
-      content: "You haven't connected any services yet. Connect GitHub, Gmail, or Slack from the sidebar to get started.",
+    const userMessage: Message = {
+      role: "user",
+      content,
       timestamp: new Date(),
-    }])
-    return
+    }
+
+    setMessages(prev => [...prev, userMessage])
+    setLoading(true)
+
+    try {
+      const res = await fetch("http://localhost:8000/agent/orchestrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          github_email: connectedAccounts.github || null,
+          gmail_email: connectedAccounts.google || null,
+          slack_email: connectedAccounts.slack || null,
+          message: content,
+        }),
+      })
+
+      const data = await res.json()
+
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: data.response || data.detail || "Something went wrong.",
+        timestamp: new Date(),
+      }])
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "Failed to reach the server. Make sure the backend is running.",
+        timestamp: new Date(),
+      }])
+    } finally {
+      setLoading(false)
+    }
   }
-
-  if (missingServices.length > 0) {
-    setMessages(prev => [...prev, {
-      role: "assistant",
-      content: `Note: ${missingServices.join(", ")} ${missingServices.length === 1 ? "is" : "are"} not connected. I'll do my best with the services you have connected.`,
-      timestamp: new Date(),
-    }])
-  }
-
-  setLoading(true)
-
-  try {
-    const res = await fetch("http://localhost:8000/agent/orchestrate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        github_email: connectedAccounts.github || session.user.email,
-        gmail_email: connectedAccounts.google || session.user.email,
-        slack_email: connectedAccounts.slack || session.user.email,
-        message: content,
-      }),
-    })
-
-    const data = await res.json()
-
-    setMessages(prev => [...prev, {
-      role: "assistant",
-      content: data.response || "Something went wrong.",
-      timestamp: new Date(),
-    }])
-  } catch (err) {
-    setMessages(prev => [...prev, {
-      role: "assistant",
-      content: "Failed to reach the server. Make sure the backend is running.",
-      timestamp: new Date(),
-    }])
-  } finally {
-    setLoading(false)
-  }
-}
 
   if (!session) {
     return (
@@ -113,6 +92,10 @@ export default function Home() {
         background: "var(--bg-base)",
         flexDirection: "column",
         gap: "32px",
+        padding: "24px",
+        position: "relative",
+        zIndex: 1,
+        touchAction: "manipulation",
       }}>
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "16px", alignItems: "center" }}>
           <div style={{
@@ -149,11 +132,6 @@ export default function Home() {
             icon="⌥"
             label="Continue with GitHub"
           />
-          <SignInButton
-            onClick={() => signIn("google")}
-            icon="✉"
-            label="Continue with Google"
-          />
         </div>
       </div>
     )
@@ -166,12 +144,28 @@ export default function Home() {
       background: "var(--bg-base)",
       overflow: "hidden",
     }}>
-      <Sidebar />
+      {/* Desktop sidebar */}
+      <div className="sidebar-desktop">
+        <Sidebar />
+      </div>
+
+      {/* Mobile overlay */}
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      {/* Mobile drawer */}
+      <div className={`sidebar-drawer ${sidebarOpen ? "open" : ""}`}>
+        <Sidebar onClose={() => setSidebarOpen(false)} />
+      </div>
+
       <main style={{
         flex: 1,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        minWidth: 0,
       }}>
         <header style={{
           padding: "16px 24px",
@@ -181,20 +175,45 @@ export default function Home() {
           justifyContent: "space-between",
           flexShrink: 0,
         }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <h1 style={{
-              fontSize: "15px",
-              fontWeight: "600",
-              color: "var(--text-primary)",
-              letterSpacing: "-0.02em",
-            }}>Chat</h1>
-            <p style={{
-              fontSize: "12px",
-              color: "var(--text-muted)",
-              fontFamily: "var(--font-mono)",
-            }}>Orchestrating GitHub · Gmail · Slack</p>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+            {/* Mobile menu button */}
+            <button
+              className="mobile-header-btn"
+              onClick={() => setSidebarOpen(true)}
+              style={{
+                display: "none",
+                width: "32px", height: "32px",
+                background: "var(--bg-elevated)",
+                border: "1px solid var(--border)",
+                borderRadius: "8px",
+                alignItems: "center", justifyContent: "center",
+                cursor: "pointer",
+                color: "var(--text-secondary)",
+                flexShrink: 0,
+                touchAction: "manipulation",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px", paddingLeft: "10px" }}>
+              <h1 style={{
+                fontSize: "15px",
+                fontWeight: "600",
+                color: "var(--text-primary)",
+                letterSpacing: "-0.02em",
+              }}>Chat</h1>
+              <p style={{
+                fontSize: "12px",
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-mono)",
+              }}>Orchestrating GitHub · Gmail · Slack</p>
+            </div>
           </div>
-          <div style={{
+          <div className="desktop-model-badge" style={{
             padding: "4px 10px",
             background: "var(--accent-dim)",
             border: "1px solid var(--accent-glow)",
@@ -202,13 +221,23 @@ export default function Home() {
             fontSize: "11px",
             fontFamily: "var(--font-mono)",
             color: "var(--accent)",
+            flexShrink: 0,
           }}>
             claude-sonnet-4-6
           </div>
         </header>
 
-        <ChatWindow messages={messages} loading={loading} />
-        <MessageInput onSend={handleSend} disabled={loading} />
+        <ChatWindow
+          messages={messages}
+          loading={loading}
+          onSuggestionClick={(text) => setInputValue(text)}
+        />
+        <MessageInput
+          onSend={handleSend}
+          disabled={loading}
+          value={inputValue}
+          onChange={setInputValue}
+        />
       </main>
 
       <style>{`
@@ -222,6 +251,11 @@ export default function Home() {
         }
         textarea::placeholder {
           color: var(--text-muted);
+        }
+        @media (max-width: 768px) {
+          .desktop-model-badge {
+            display: none !important;
+          }
         }
       `}</style>
     </div>
@@ -240,30 +274,25 @@ function SignInButton({ onClick, icon, label }: {
         display: "flex",
         alignItems: "center",
         gap: "12px",
-        padding: "12px 16px",
+        padding: "16px",
         background: "var(--bg-surface)",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-md)",
         color: "var(--text-primary)",
-        fontSize: "14px",
+        fontSize: "16px",
         fontWeight: "500",
         cursor: "pointer",
         fontFamily: "var(--font-sans)",
-        transition: "all var(--transition)",
         width: "100%",
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--accent-glow)"
-        ;(e.currentTarget as HTMLButtonElement).style.background = "var(--bg-elevated)"
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"
-        ;(e.currentTarget as HTMLButtonElement).style.background = "var(--bg-surface)"
+        WebkitTapHighlightColor: "transparent",
+        touchAction: "manipulation",
+        userSelect: "none",
+        minHeight: "52px",
       }}
     >
       <span style={{
         fontFamily: "var(--font-mono)",
-        fontSize: "14px",
+        fontSize: "16px",
         color: "var(--accent)",
         width: "20px",
         textAlign: "center",

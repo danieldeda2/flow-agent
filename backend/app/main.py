@@ -7,6 +7,7 @@ from app.routers.auth import router as auth_router
 from app.routers.github import router as github_router
 from app.routers.agent import router as agent_router
 from app.routers.slack import router as slack_router
+from app.routers.google import router as google_router
 
 load_dotenv()
 
@@ -24,7 +25,7 @@ app.include_router(auth_router)
 app.include_router(github_router)
 app.include_router(agent_router)
 app.include_router(slack_router)
-
+app.include_router(google_router)
 
 @app.on_event("startup")
 def startup():

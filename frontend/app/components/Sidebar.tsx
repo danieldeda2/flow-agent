@@ -13,7 +13,7 @@ interface ConnectedServices {
   slack: ServiceInfo
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const { data: session } = useSession()
   const [services, setServices] = useState<ConnectedServices>({
     github: { connected: false, email: null },
@@ -30,11 +30,13 @@ export default function Sidebar() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get("slack") === "connected") {
+    if (params.get("slack") === "connected" || params.get("google") === "connected") {
       checkConnectedServices()
       window.history.replaceState({}, "", "/")
     }
   }, [])
+
+
 
   const checkConnectedServices = async () => {
     setLoading(true)
@@ -57,6 +59,23 @@ export default function Sidebar() {
       console.error("Failed to fetch connected services")
     }
     setLoading(false)
+  }
+
+  const handleDisconnect = async (provider: string) => {
+    const email = session?.user?.email
+    if (!email) return
+    try {
+      await fetch(
+        `http://localhost:8000/auth/disconnect/${encodeURIComponent(email)}/${provider}`,
+        { method: "DELETE" }
+      )
+      setServices(prev => ({
+        ...prev,
+        [provider]: { connected: false, email: null },
+      }))
+    } catch {
+      console.error("Failed to disconnect", provider)
+    }
   }
 
   const connectedCount = Object.values(services).filter(s => s.connected).length
@@ -158,6 +177,7 @@ export default function Sidebar() {
           service={services.github}
           loading={loading}
           onConnect={() => signIn("github")}
+          onDisconnect={() => handleDisconnect("github")}
         />
         <ServiceCard
           icon={<GmailIcon />}
@@ -165,7 +185,7 @@ export default function Sidebar() {
           description="Email & inbox"
           service={services.google}
           loading={loading}
-          onConnect={() => signIn("google")}
+          onConnect={() => window.location.href = `http://localhost:8000/google/connect?master_email=${encodeURIComponent(session?.user?.email || "")}`}          onDisconnect={() => handleDisconnect("google")}
         />
         <ServiceCard
           icon={<SlackIcon />}
@@ -173,7 +193,8 @@ export default function Sidebar() {
           description="Channels & messages"
           service={services.slack}
           loading={loading}
-          onConnect={() => window.location.href = "http://localhost:8000/slack/connect"}
+          onConnect={() => window.location.href = `http://localhost:8000/slack/connect?master_email=${encodeURIComponent(session?.user?.email || "")}`}
+          onDisconnect={() => handleDisconnect("slack")}
         />
       </div>
 
@@ -277,21 +298,15 @@ export default function Sidebar() {
   )
 }
 
-function ServiceCard({ icon, label, description, service, loading, onConnect }: {
+function ServiceCard({ icon, label, description, service, loading, onConnect, onDisconnect }: {
   icon: React.ReactNode
   label: string
   description: string
   service: ServiceInfo
   loading: boolean
   onConnect: () => void
+  onDisconnect: () => void
 }) {
-  const truncateEmail = (email: string) => {
-    if (email.length <= 22) return email
-    const [user, domain] = email.split("@")
-    if (!domain) return email
-    return `${user.slice(0, 10)}...@${domain}`
-  }
-
   return (
     <div style={{
       display: "flex",
@@ -315,13 +330,11 @@ function ServiceCard({ icon, label, description, service, loading, onConnect }: 
       </div>
 
       <div style={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <p style={{
-            fontSize: "13px", fontWeight: "500",
-            color: "var(--text-primary)",
-            lineHeight: "1.3",
-          }}>{label}</p>
-        </div>
+        <p style={{
+          fontSize: "13px", fontWeight: "500",
+          color: "var(--text-primary)",
+          lineHeight: "1.3",
+        }}>{label}</p>
         {service.connected && service.email ? (
           <p style={{
             fontSize: "10px",
@@ -333,7 +346,7 @@ function ServiceCard({ icon, label, description, service, loading, onConnect }: 
             textOverflow: "ellipsis",
             marginTop: "1px",
           }}>
-            {truncateEmail(service.email)}
+            {service.email}
           </p>
         ) : (
           <p style={{
@@ -352,46 +365,40 @@ function ServiceCard({ icon, label, description, service, loading, onConnect }: 
           opacity: 0.3,
           flexShrink: 0,
         }} />
-    ) : service.connected ? (
-        <div
-            onClick={onConnect}
-            style={{
-            display: "flex", alignItems: "center", gap: "4px",
-            padding: "3px 8px",
-            borderRadius: "20px",
-            background: "rgba(61, 214, 140, 0.08)",
-            border: "1px solid rgba(61, 214, 140, 0.2)",
-            flexShrink: 0,
+      ) : service.connected ? (
+        <button
+          onClick={onDisconnect}
+          title="Disconnect"
+          style={{
+            background: "transparent",
+            border: "1px solid transparent",
+            borderRadius: "6px",
+            color: "var(--text-muted)",
+            fontSize: "14px",
+            width: "24px",
+            height: "24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             cursor: "pointer",
+            flexShrink: 0,
             transition: "all var(--transition)",
-            }}
-            onMouseEnter={e => {
-            e.currentTarget.style.background = "var(--accent-dim)"
-            e.currentTarget.style.borderColor = "var(--accent-glow)"
-            e.currentTarget.querySelector("span")!.textContent = "refresh"
-            e.currentTarget.querySelector("div")!.style.background = "var(--accent)"
-            }}
-            onMouseLeave={e => {
-            e.currentTarget.style.background = "rgba(61, 214, 140, 0.08)"
-            e.currentTarget.style.borderColor = "rgba(61, 214, 140, 0.2)"
-            e.currentTarget.querySelector("span")!.textContent = "live"
-            e.currentTarget.querySelector("div")!.style.background = "var(--success)"
-            }}
+            padding: 0,
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget).style.borderColor = "var(--error)"
+            ;(e.currentTarget).style.color = "var(--error)"
+            ;(e.currentTarget).style.background = "rgba(255,80,80,0.06)"
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget).style.borderColor = "transparent"
+            ;(e.currentTarget).style.color = "var(--text-muted)"
+            ;(e.currentTarget).style.background = "transparent"
+          }}
         >
-            <div style={{
-            width: "5px", height: "5px",
-            borderRadius: "50%",
-            background: "var(--success)",
-            boxShadow: "0 0 4px var(--success)",
-            transition: "all var(--transition)",
-            }} />
-            <span style={{
-            fontSize: "10px",
-            fontFamily: "var(--font-mono)",
-            color: "var(--success)",
-            }}>live</span>
-        </div>
-        ) : (
+          ✕
+        </button>
+      ) : (
         <button
           onClick={onConnect}
           style={{

@@ -20,7 +20,7 @@ class CallbackRequest(BaseModel):
 async def auth_callback(request: Request, db: Session = Depends(get_db)):
     data = await request.json()
     print("AUTH CALLBACK DATA:", data)
-    
+
     email = data.get("email")
     if not email:
         return {"status": "error", "detail": "no email"}
@@ -51,6 +51,22 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
             refresh_token=data.get("refresh_token")
         )
         db.add(token)
+
+    # Write ConnectedAccount for GitHub (master links to itself)
+    if data.get("provider") == "github":
+        connected = db.query(ConnectedAccount).filter(
+            ConnectedAccount.master_user_id == user.id,
+            ConnectedAccount.provider == "github"
+        ).first()
+        if connected:
+            connected.provider_email = email
+        else:
+            connected = ConnectedAccount(
+                master_user_id=user.id,
+                provider="github",
+                provider_email=email
+            )
+            db.add(connected)
 
     db.commit()
     return {"status": "ok"}
@@ -87,3 +103,42 @@ def get_connected_accounts(master_email: str, db: Session = Depends(get_db)):
     result = {a.provider: a.provider_email for a in accounts}
     result["master"] = master_email
     return result
+
+@router.delete("/auth/disconnect/{master_email}/{provider}")
+def disconnect_provider(master_email: str, provider: str, db: Session = Depends(get_db)):
+    master_user = db.query(User).filter(User.email == master_email).first()
+    if not master_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Find and remove ConnectedAccount, get provider email before deleting
+    connected = db.query(ConnectedAccount).filter(
+        ConnectedAccount.master_user_id == master_user.id,
+        ConnectedAccount.provider == provider
+    ).first()
+
+    provider_email = connected.provider_email if connected else None
+
+    if connected:
+        db.delete(connected)
+
+    # Delete token from the provider user record (may differ from master)
+    if provider_email:
+        provider_user = db.query(User).filter(User.email == provider_email).first()
+        if provider_user:
+            token = db.query(ProviderToken).filter(
+                ProviderToken.user_id == provider_user.id,
+                ProviderToken.provider == provider
+            ).first()
+            if token:
+                db.delete(token)
+
+    # Also try master user just in case token is stored there
+    token = db.query(ProviderToken).filter(
+        ProviderToken.user_id == master_user.id,
+        ProviderToken.provider == provider
+    ).first()
+    if token:
+        db.delete(token)
+
+    db.commit()
+    return {"status": "disconnected", "provider": provider}

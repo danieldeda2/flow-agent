@@ -7,6 +7,7 @@ from app.agents.gmail_agent import run_gmail_agent
 from app.agents.slack_agent import run_slack_agent
 from app.agents.orchestrator import run_orchestrator
 from pydantic import BaseModel
+from typing import Optional
 
 router = APIRouter()
 
@@ -16,9 +17,9 @@ class AgentRequest(BaseModel):
     provider: str = "github"
 
 class OrchestratorRequest(BaseModel):
-    github_email: str
-    gmail_email: str
-    slack_email: str
+    github_email: Optional[str] = None
+    gmail_email: Optional[str] = None
+    slack_email: Optional[str] = None
     message: str
 
 @router.post("/agent/run")
@@ -47,27 +48,31 @@ def run_agent_endpoint(request: AgentRequest, db: Session = Depends(get_db)):
 
 @router.post("/agent/orchestrate")
 def run_orchestrator_endpoint(request: OrchestratorRequest, db: Session = Depends(get_db)):
-    def get_token(email: str, provider: str):
+    def get_token(email: Optional[str], provider: str):
+        if not email:
+            return None
         user = db.query(User).filter(User.email == email).first()
         if not user:
-            raise HTTPException(status_code=404, detail=f"User not found: {email}")
+            return None
         token = db.query(ProviderToken).filter(
             ProviderToken.user_id == user.id,
             ProviderToken.provider == provider
         ).first()
-        if not token:
-            raise HTTPException(status_code=404, detail=f"{provider} token not found for {email}")
         return token
 
     github_token = get_token(request.github_email, "github")
     gmail_token = get_token(request.gmail_email, "google")
     slack_token = get_token(request.slack_email, "slack")
 
+    # Require at least one service connected
+    if not any([github_token, gmail_token, slack_token]):
+        raise HTTPException(status_code=400, detail="No services connected")
+
     response = run_orchestrator(
-        github_token=github_token.access_token,
-        gmail_token=gmail_token.access_token,
-        gmail_refresh_token=gmail_token.refresh_token,
-        slack_token=slack_token.access_token,
+        github_token=github_token.access_token if github_token else None,
+        gmail_token=gmail_token.access_token if gmail_token else None,
+        gmail_refresh_token=gmail_token.refresh_token if gmail_token else None,
+        slack_token=slack_token.access_token if slack_token else None,
         message=request.message
     )
 
