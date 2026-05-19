@@ -77,6 +77,9 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
             )
             db.add(connected)
 
+    print("PROVIDER:", data.get("provider"))
+    print("EXPIRES AT BEING SET:", get_expires_at(data.get("provider")))
+
     db.commit()
     return {"status": "ok"}
 
