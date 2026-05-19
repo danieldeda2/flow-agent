@@ -36,6 +36,7 @@ def get_gmail_service(
 ):
     print(f"get_gmail_service called, expires_at: {expires_at}")
     print(f"token_expired check: {expires_at and datetime.utcnow() >= expires_at}")
+    print(f"refresh_token received: {refresh_token[:20] if refresh_token else None}")
     scope = "https://www.googleapis.com/auth/gmail.readonly" if readonly else "https://mail.google.com/"
     creds = Credentials(
         token=access_token,
