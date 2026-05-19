@@ -26,6 +26,7 @@ class ProviderToken(Base):
     provider = Column(String, nullable=False)
     access_token = Column(Text, nullable=False)
     refresh_token = Column(Text, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

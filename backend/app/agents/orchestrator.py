@@ -14,6 +14,7 @@ import os
 import time
 import email.mime.text
 import email.mime.multipart
+from datetime import datetime, timedelta
 
 llm = ChatAnthropic(model="claude-sonnet-4-6")
 
@@ -22,10 +23,17 @@ class OrchestratorState(TypedDict):
     github_token: Optional[str]
     gmail_token: Optional[str]
     gmail_refresh_token: Optional[str]
+    gmail_expires_at: Optional[datetime]
     slack_token: Optional[str]
     output: str
 
-def get_gmail_service(access_token: str, refresh_token: str, readonly: bool = True, on_refresh: Optional[Callable[[str], None]] = None):
+def get_gmail_service(
+    access_token: str,
+    refresh_token: str,
+    expires_at: Optional[datetime] = None,
+    readonly: bool = True,
+    on_refresh: Optional[Callable[[str, datetime], None]] = None
+):
     scope = "https://www.googleapis.com/auth/gmail.readonly" if readonly else "https://mail.google.com/"
     creds = Credentials(
         token=access_token,
@@ -35,13 +43,12 @@ def get_gmail_service(access_token: str, refresh_token: str, readonly: bool = Tr
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         scopes=[scope]
     )
-
-    print(f"Token expired: {creds.expired}")
-    print(f"Token valid: {creds.valid}")
-    if creds.expired and creds.refresh_token:
+    token_expired = expires_at and datetime.utcnow() >= expires_at
+    if token_expired and creds.refresh_token:
         creds.refresh(Request())
         if on_refresh:
-            on_refresh(creds.token)
+            new_expires_at = datetime.utcnow() + timedelta(hours=1)
+            on_refresh(creds.token, new_expires_at)
     return build("gmail", "v1", credentials=creds)
 
 def get_github_username(token: str) -> str:
@@ -51,7 +58,7 @@ def get_github_username(token: str) -> str:
     )
     return response.json().get("login", "")
 
-def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token, on_gmail_refresh: Optional[Callable[[str], None]] = None):
+def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token, gmail_expires_at=None, on_gmail_refresh=None):
 
     # ─── GITHUB TOOLS ────────────────────────────────────────────────
 
@@ -190,7 +197,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Get unread emails from Gmail. Returns message IDs and metadata."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token, on_refresh=on_gmail_refresh)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, expires_at=gmail_expires_at, on_refresh=on_gmail_refresh)
         results = service.users().messages().list(
             userId="me", q="is:unread", maxResults=10
         ).execute()
@@ -212,7 +219,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Get the full body of a specific email by MESSAGE_ID."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token, on_refresh=on_gmail_refresh)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, expires_at=gmail_expires_at, on_refresh=on_gmail_refresh)
         detail = service.users().messages().get(
             userId="me", id=message_id, format="full"
         ).execute()
@@ -235,7 +242,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Search emails by keyword, sender, subject, or any Gmail search query."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token, on_refresh=on_gmail_refresh)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, expires_at=gmail_expires_at, on_refresh=on_gmail_refresh)
         results = service.users().messages().list(
             userId="me", q=query, maxResults=10
         ).execute()
@@ -257,7 +264,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Mark a specific email as read by MESSAGE_ID."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token, on_refresh=on_gmail_refresh)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, expires_at=gmail_expires_at, on_refresh=on_gmail_refresh)
         service.users().messages().modify(
             userId="me",
             id=message_id,
@@ -270,7 +277,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Send an email via Gmail. to is the recipient email address."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token, readonly=False, on_refresh=on_gmail_refresh)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, expires_at=gmail_expires_at, readonly=False, on_refresh=on_gmail_refresh)
         message = email.mime.multipart.MIMEMultipart()
         message["to"] = to
         message["subject"] = subject
@@ -286,7 +293,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Reply to an existing email by MESSAGE_ID."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token, readonly=False, on_refresh=on_gmail_refresh)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, expires_at=gmail_expires_at, readonly=False, on_refresh=on_gmail_refresh)
         original = service.users().messages().get(
             userId="me", id=message_id, format="metadata",
             metadataHeaders=["From", "Subject", "Message-ID"]
@@ -439,8 +446,8 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         get_slack_dms,
     ]
 
-def run_orchestrator(github_token, gmail_token, gmail_refresh_token, slack_token, message: str, on_gmail_refresh: Optional[Callable[[str], None]] = None):
-    tools = make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token, on_gmail_refresh=on_gmail_refresh)
+def run_orchestrator(github_token, gmail_token, gmail_refresh_token, slack_token, message: str, gmail_expires_at: Optional[datetime] = None, on_gmail_refresh: Optional[Callable[[str, datetime], None]] = None):
+    tools = make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token, gmail_expires_at=gmail_expires_at, on_gmail_refresh=on_gmail_refresh)
     llm_with_tools = llm.bind_tools(tools)
     tool_map = {t.name: t for t in tools}
 
@@ -492,6 +499,7 @@ Never ask the user for credentials. Always use your tools to get real data.""")
         "github_token": github_token,
         "gmail_token": gmail_token,
         "gmail_refresh_token": gmail_refresh_token,
+        "gmail_expires_at": gmail_expires_at,
         "slack_token": slack_token,
         "output": ""
     })

@@ -8,6 +8,7 @@ from app.agents.slack_agent import run_slack_agent
 from app.agents.orchestrator import run_orchestrator
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 router = APIRouter()
 
@@ -67,10 +68,11 @@ def run_orchestrator_endpoint(request: OrchestratorRequest, db: Session = Depend
     if not any([github_token, gmail_token, slack_token]):
         raise HTTPException(status_code=400, detail="No services connected")
 
-    # Callback that fires the moment Gmail refreshes a token — writes it to DB immediately
-    def on_gmail_refresh(new_token: str):
+    # Fires the moment Gmail refreshes — writes new token and expiry to DB immediately
+    def on_gmail_refresh(new_token: str, new_expires_at: datetime):
         try:
             gmail_token.access_token = new_token
+            gmail_token.expires_at = new_expires_at
             db.commit()
         except Exception as e:
             print(f"Failed to persist refreshed Gmail token: {e}")
@@ -81,6 +83,7 @@ def run_orchestrator_endpoint(request: OrchestratorRequest, db: Session = Depend
         gmail_refresh_token=gmail_token.refresh_token if gmail_token else None,
         slack_token=slack_token.access_token if slack_token else None,
         message=request.message,
+        gmail_expires_at=gmail_token.expires_at if gmail_token else None,
         on_gmail_refresh=on_gmail_refresh if gmail_token else None,
     )
 

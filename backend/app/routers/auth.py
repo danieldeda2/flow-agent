@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import User, ProviderToken, ConnectedAccount
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -15,6 +16,11 @@ class CallbackRequest(BaseModel):
     refresh_token: Optional[str]
     provider: str
     master_email: Optional[str] = None
+
+def get_expires_at(provider: str) -> Optional[datetime]:
+    if provider == "google":
+        return datetime.utcnow() + timedelta(hours=1)
+    return None
 
 @router.post("/auth/callback")
 async def auth_callback(request: Request, db: Session = Depends(get_db)):
@@ -35,25 +41,28 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
         db.add(user)
         db.flush()
 
+    provider = data.get("provider")
     token = db.query(ProviderToken).filter(
         ProviderToken.user_id == user.id,
-        ProviderToken.provider == data.get("provider")
+        ProviderToken.provider == provider
     ).first()
 
     if token:
         token.access_token = data.get("access_token")
         token.refresh_token = data.get("refresh_token")
+        token.expires_at = get_expires_at(provider)
     else:
         token = ProviderToken(
             user_id=user.id,
-            provider=data.get("provider"),
+            provider=provider,
             access_token=data.get("access_token"),
-            refresh_token=data.get("refresh_token")
+            refresh_token=data.get("refresh_token"),
+            expires_at=get_expires_at(provider)
         )
         db.add(token)
 
     # Write ConnectedAccount for GitHub (master links to itself)
-    if data.get("provider") == "github":
+    if provider == "github":
         connected = db.query(ConnectedAccount).filter(
             ConnectedAccount.master_user_id == user.id,
             ConnectedAccount.provider == "github"
@@ -110,7 +119,6 @@ def disconnect_provider(master_email: str, provider: str, db: Session = Depends(
     if not master_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Find and remove ConnectedAccount, get provider email before deleting
     connected = db.query(ConnectedAccount).filter(
         ConnectedAccount.master_user_id == master_user.id,
         ConnectedAccount.provider == provider
@@ -121,7 +129,6 @@ def disconnect_provider(master_email: str, provider: str, db: Session = Depends(
     if connected:
         db.delete(connected)
 
-    # Delete token from the provider user record (may differ from master)
     if provider_email:
         provider_user = db.query(User).filter(User.email == provider_email).first()
         if provider_user:
@@ -132,7 +139,6 @@ def disconnect_provider(master_email: str, provider: str, db: Session = Depends(
             if token:
                 db.delete(token)
 
-    # Also try master user just in case token is stored there
     token = db.query(ProviderToken).filter(
         ProviderToken.user_id == master_user.id,
         ProviderToken.provider == provider
