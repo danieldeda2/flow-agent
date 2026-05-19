@@ -34,9 +34,6 @@ def get_gmail_service(
     readonly: bool = True,
     on_refresh: Optional[Callable[[str, datetime], None]] = None
 ):
-    print(f"get_gmail_service called, expires_at: {expires_at}")
-    print(f"token_expired check: {expires_at and datetime.utcnow() >= expires_at}")
-    print(f"refresh_token received: {refresh_token[:20] if refresh_token else None}")
     scope = "https://www.googleapis.com/auth/gmail.readonly" if readonly else "https://mail.google.com/"
     creds = Credentials(
         token=access_token,
@@ -46,18 +43,12 @@ def get_gmail_service(
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         scopes=[scope]
     )
-    print(f"creds.refresh_token: {bool(creds.refresh_token)}")
-    print(f"creds.expired: {creds.expired}")
-    if token_expired and creds.refresh_token:
-        print("entering refresh block")
     token_expired = expires_at and datetime.utcnow() >= expires_at
     if token_expired and creds.refresh_token:
         creds.refresh(Request())
-        print(f"Token refreshed successfully, new token: {creds.token[:20]}...")
         if on_refresh:
             new_expires_at = datetime.utcnow() + timedelta(hours=1)
             on_refresh(creds.token, new_expires_at)
-            print("DB updated with new token")
     return build("gmail", "v1", credentials=creds)
 
 def get_github_username(token: str) -> str:
