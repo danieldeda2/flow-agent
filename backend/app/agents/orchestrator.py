@@ -46,6 +46,7 @@ def get_gmail_service(
     token_expired = expires_at and datetime.utcnow() >= expires_at
     if token_expired and creds.refresh_token:
         creds.refresh(Request())
+        print(f"Token refreshed successfully, new token: {creds.token[:20]}...")
         if on_refresh:
             new_expires_at = datetime.utcnow() + timedelta(hours=1)
             on_refresh(creds.token, new_expires_at)
