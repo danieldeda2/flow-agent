@@ -1,37 +1,23 @@
 # FlowAgent
 
-An AI-powered orchestration platform that connects GitHub, Gmail, and Slack into a single conversational interface. Ask natural language questions across all three services simultaneously — FlowAgent reasons across them and takes real actions on your behalf.
+**AI-powered orchestration across GitHub, Gmail, and Slack — in a single chat interface.**
 
-![FlowAgent](https://img.shields.io/badge/Built%20with-Claude%20Sonnet-4f8eff?style=flat-square) ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square) ![Next.js](https://img.shields.io/badge/Frontend-Next.js-000000?style=flat-square) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791?style=flat-square)
+FlowAgent connects your developer tools and lets you interact with all of them through natural language. Ask it to summarize your emails, check your GitHub issues, read your Slack channels, or do all three at once. It reasons across services, takes actions, and returns a unified response.
 
----
-
-## What it does
-
-FlowAgent lets you interact with your connected services through a single chat interface powered by Claude. It can read across services and take actions:
-
-```
-"Give me a full briefing — summarize my unread emails, open GitHub issues, and Slack activity"
-
-"Read my most recent email and create a GitHub issue about it in my CarQuest repo"
-
-"What repos do I have on GitHub and do any of my recent emails relate to them?"
-```
-
-Every command runs through a LangGraph agent that decides which services to call, executes the right API calls with your stored tokens, and synthesizes the results into a single coherent response.
+Live at [flow-agent.io](https://flow-agent.io)
 
 ---
 
 ## Tech Stack
 
-| Layer - Technology |
-
-| Frontend - Next.js 16, TypeScript, NextAuth.js |
-| Backend - FastAPI, Python |
-| Database - PostgreSQL (Railway) |
-| Agents - LangGraph, LangChain, Claude Sonnet |
-| Auth - OAuth 2.0 — GitHub, Google, Slack |
-| Deployment - Vercel (frontend), Railway (backend + DB)
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js, TypeScript, NextAuth.js |
+| Backend | FastAPI, Python |
+| Database | PostgreSQL (Railway) |
+| Agent | LangGraph, LangChain, Claude Sonnet |
+| Auth | OAuth 2.0 — GitHub, Google, Slack |
+| Deploy | Vercel (frontend), Railway (backend + DB) |
 
 ---
 
@@ -49,6 +35,7 @@ Every command runs through a LangGraph agent that decides which services to call
 │  /auth/callback     → Save OAuth tokens to DB   │
 │  /auth/connected    → Resolve provider emails   │
 │  /agent/orchestrate → Run cross-service agent   │
+│  /google/connect    → Custom Gmail OAuth flow   │
 │  /slack/connect     → Custom Slack OAuth flow   │
 └──────────┬───────────────────────┬──────────────┘
            │                       │
@@ -63,158 +50,98 @@ Every command runs through a LangGraph agent that decides which services to call
 
 ### Key Design Decisions
 
-**Connected Accounts System** — A user who signs in with GitHub and connects Gmail and Slack has their tokens linked under one master identity. The orchestrator resolves the right token for each provider automatically.
+**Single Master Identity** — Users sign in with GitHub as their primary identity. Gmail and Slack are connected as additional services, all linked to the same master account. This prevents token confusion across providers.
 
-**LangGraph Orchestrator** — Rather than routing requests to individual service agents, a single stateful graph has tools for all three services. Claude decides which tools to call and in what order based on the user's natural language request.
+**LangGraph Orchestrator** — A single stateful graph has tools for all three services. Claude decides which tools to call and in what order based on the user's natural language request. Tools fail gracefully when a service isn't connected.
 
-**Custom Slack OAuth** — NextAuth's built-in Slack provider doesn't support user-scoped tokens cleanly. FlowAgent implements a custom OAuth flow directly in FastAPI for full control over scopes and token extraction.
-
----
-
-## Features
-
-- **Multi-provider OAuth** — GitHub, Gmail, and Slack with refresh token support
-- **Cross-service reasoning** — Single agent with tools spanning all three services
-- **Real write actions** — Create GitHub issues, with more write operations extensible
-- **Multi-tenant** — Each user's tokens are isolated in PostgreSQL
-- **Token refresh** — Gmail access tokens refresh automatically on expiry
-- **Clean UI** — Dark, minimal chat interface showing connection status per service
+**Separate OAuth Flows** — Gmail and Slack use custom FastAPI OAuth endpoints rather than NextAuth, giving full control over token scopes and storage.
 
 ---
 
-## Getting Started
+## What FlowAgent Can Do
 
-### Prerequisites
+### GitHub
+- List all your repositories
+- Get open issues for any repo
+- Create a new issue
+- Close an issue
+- Comment on an issue
+- Get open pull requests
+- View recent commit history
 
-- Node.js 18+
-- Python 3.11+
-- PostgreSQL (or Railway account)
-- Anthropic API key
-- GitHub, Google, and Slack OAuth apps
+### Gmail
+- Summarize unread emails
+- Read the full body of any email
+- Search emails by sender, subject, or keyword
+- Mark emails as read
+- Send an email
+- Reply to an email
 
-### Backend Setup
-
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Create `backend/.env`:
-
-```env
-DATABASE_URL=postgresql://...
-ANTHROPIC_API_KEY=sk-ant-...
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-SLACK_CLIENT_ID=...
-SLACK_CLIENT_SECRET=...
-```
-
-```bash
-uvicorn app.main:app --reload
-```
-
-### Frontend Setup
-
-```bash
-cd frontend
-npm install
-```
-
-Create `frontend/.env.local`:
-
-```env
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-NEXTAUTH_SECRET=...
-NEXTAUTH_URL=http://localhost:3000
-```
-
-```bash
-npm run dev
-```
-
-### OAuth App Configuration
-
-**GitHub** — Homepage URL: `http://localhost:3000` · Callback: `http://localhost:3000/api/auth/callback/github`
-
-**Google** — Redirect URI: `http://localhost:3000/api/auth/callback/google` · Scopes: `openid email profile gmail.readonly`
-
-**Slack** — Redirect URL: `http://localhost:8000/slack/callback` · User Token Scopes: `channels:read channels:history groups:read groups:history im:read im:history users:read`
+### Slack
+- List all channels
+- Read recent messages from any channel
+- Send a message to a channel
+- Reply to a thread
+- Search messages by keyword across all channels
+- Read direct messages
 
 ---
 
-## Project Structure
+## Example Prompts
+
+### Single Service
 
 ```
-flowagent/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI app, CORS, startup
-│   │   ├── database.py          # SQLAlchemy engine + session
-│   │   ├── models/              # User, ProviderToken, ConnectedAccount
-│   │   ├── routers/
-│   │   │   ├── auth.py          # OAuth callbacks, token retrieval
-│   │   │   ├── agent.py         # Agent + orchestrator endpoints
-│   │   │   ├── github.py        # GitHub API endpoints
-│   │   │   └── slack.py         # Custom Slack OAuth flow
-│   │   └── agents/
-│   │       ├── github_agent.py  # GitHub LangGraph agent
-│   │       ├── gmail_agent.py   # Gmail LangGraph agent
-│   │       ├── slack_agent.py   # Slack LangGraph agent
-│   │       └── orchestrator.py  # Cross-service agent
-│   └── requirements.txt
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx             # Main chat interface
-│   │   ├── layout.tsx           # SessionProvider wrapper
-│   │   ├── globals.css          # Design tokens
-│   │   ├── components/
-│   │   │   ├── Sidebar.tsx      # Connection status + user info
-│   │   │   ├── ChatWindow.tsx   # Message history
-│   │   │   └── MessageInput.tsx # Input bar
-│   │   └── api/auth/            # NextAuth route handler
-│   └── package.json
-└── README.md
+What are my unread emails?
+```
+```
+Show me the open issues in my flow-agent repo
+```
+```
+What channels do I have in Slack?
+```
+```
+Show me the recent commits in my CarQuest repo
+```
+```
+Search my emails for anything from GitHub
 ```
 
----
+### Actions
 
-## API Reference
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/auth/callback` | Save OAuth token on sign-in |
-| GET | `/auth/token/{email}/{provider}` | Retrieve provider token |
-| GET | `/auth/connected/{email}` | Get all connected provider emails |
-| POST | `/agent/run` | Run single-service agent |
-| POST | `/agent/orchestrate` | Run cross-service orchestrator |
-| GET | `/slack/connect` | Initiate Slack OAuth flow |
-| GET | `/slack/callback` | Handle Slack OAuth callback |
-| GET | `/health` | Health check |
-
----
-
-## Extending FlowAgent
-
-Adding a new tool to the orchestrator takes about 10 lines:
-
-```python
-@tool
-def create_github_pr(repo_name: str, title: str, body: str) -> str:
-    """Create a pull request in a GitHub repository"""
-    response = requests.post(
-        f"https://api.github.com/repos/{username}/{repo_name}/pulls",
-        headers={"Authorization": f"Bearer {github_token}"},
-        json={"title": title, "body": body, "head": "main", "base": "main"}
-    )
-    return f"PR created: {response.json()['html_url']}"
+```
+Send an email to john@example.com with subject "Meeting" and body "Are you free Thursday?"
+```
+```
+Create a GitHub issue in my flow-agent repo titled "Fix mobile layout" 
+```
+```
+Send a message to #general saying "Deploying in 5 minutes"
+```
+```
+Mark my most recent unread email as read
+```
+```
+Close issue #12 in my portfolio repo
 ```
 
-Add it to `make_orchestrator_tools` and the agent will automatically know when to use it.
+### Cross-Service Orchestration
+
+```
+Read my most recent email and create a GitHub issue about it in my flow-agent repo
+```
+```
+Summarize my unread emails and open GitHub issues together
+```
+```
+Check my Slack channels and emails and give me a full morning briefing
+```
+```
+Search my emails for anything related to my CarQuest repo and summarize what you find
+```
+```
+Send a Slack message to #dev with a summary of my open GitHub issues
+```
+```
+Reply to my most recent email and then create a GitHub issue tracking the follow-up
+```
