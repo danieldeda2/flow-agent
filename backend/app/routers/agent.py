@@ -8,9 +8,6 @@ from app.agents.slack_agent import run_slack_agent
 from app.agents.orchestrator import run_orchestrator
 from pydantic import BaseModel
 from typing import Optional
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-import os
 
 router = APIRouter()
 
@@ -70,30 +67,21 @@ def run_orchestrator_endpoint(request: OrchestratorRequest, db: Session = Depend
     if not any([github_token, gmail_token, slack_token]):
         raise HTTPException(status_code=400, detail="No services connected")
 
+    # Callback that fires the moment Gmail refreshes a token — writes it to DB immediately
+    def on_gmail_refresh(new_token: str):
+        try:
+            gmail_token.access_token = new_token
+            db.commit()
+        except Exception as e:
+            print(f"Failed to persist refreshed Gmail token: {e}")
+
     response = run_orchestrator(
         github_token=github_token.access_token if github_token else None,
         gmail_token=gmail_token.access_token if gmail_token else None,
         gmail_refresh_token=gmail_token.refresh_token if gmail_token else None,
         slack_token=slack_token.access_token if slack_token else None,
-        message=request.message
+        message=request.message,
+        on_gmail_refresh=on_gmail_refresh if gmail_token else None,
     )
-
-    # If Gmail was connected, check if the token was refreshed and persist it
-    if gmail_token:
-        try:
-            creds = Credentials(
-                token=gmail_token.access_token,
-                refresh_token=gmail_token.refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=os.getenv("GOOGLE_CLIENT_ID"),
-                client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-            )
-            if creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-                gmail_token.access_token = creds.token
-                db.commit()
-        except Exception as e:
-            # Don't fail the request if token persistence fails
-            print(f"Failed to persist refreshed Gmail token: {e}")
 
     return {"response": response}

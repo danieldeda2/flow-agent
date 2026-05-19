@@ -2,7 +2,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain.tools import tool
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, END
-from typing import TypedDict, Annotated, Optional
+from typing import TypedDict, Annotated, Optional, Callable
 import operator
 import requests
 from google.oauth2.credentials import Credentials
@@ -25,7 +25,7 @@ class OrchestratorState(TypedDict):
     slack_token: Optional[str]
     output: str
 
-def get_gmail_service(access_token: str, refresh_token: str, readonly: bool = True):
+def get_gmail_service(access_token: str, refresh_token: str, readonly: bool = True, on_refresh: Optional[Callable[[str], None]] = None):
     scope = "https://www.googleapis.com/auth/gmail.readonly" if readonly else "https://mail.google.com/"
     creds = Credentials(
         token=access_token,
@@ -37,6 +37,8 @@ def get_gmail_service(access_token: str, refresh_token: str, readonly: bool = Tr
     )
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
+        if on_refresh:
+            on_refresh(creds.token)
     return build("gmail", "v1", credentials=creds)
 
 def get_github_username(token: str) -> str:
@@ -46,7 +48,7 @@ def get_github_username(token: str) -> str:
     )
     return response.json().get("login", "")
 
-def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token):
+def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token, on_gmail_refresh: Optional[Callable[[str], None]] = None):
 
     # ─── GITHUB TOOLS ────────────────────────────────────────────────
 
@@ -185,7 +187,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Get unread emails from Gmail. Returns message IDs and metadata."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, on_refresh=on_gmail_refresh)
         results = service.users().messages().list(
             userId="me", q="is:unread", maxResults=10
         ).execute()
@@ -207,7 +209,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Get the full body of a specific email by MESSAGE_ID."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, on_refresh=on_gmail_refresh)
         detail = service.users().messages().get(
             userId="me", id=message_id, format="full"
         ).execute()
@@ -230,7 +232,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Search emails by keyword, sender, subject, or any Gmail search query."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, on_refresh=on_gmail_refresh)
         results = service.users().messages().list(
             userId="me", q=query, maxResults=10
         ).execute()
@@ -252,7 +254,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Mark a specific email as read by MESSAGE_ID."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, on_refresh=on_gmail_refresh)
         service.users().messages().modify(
             userId="me",
             id=message_id,
@@ -265,7 +267,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Send an email via Gmail. to is the recipient email address."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token, readonly=False)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, readonly=False, on_refresh=on_gmail_refresh)
         message = email.mime.multipart.MIMEMultipart()
         message["to"] = to
         message["subject"] = subject
@@ -281,7 +283,7 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         """Reply to an existing email by MESSAGE_ID."""
         if not gmail_token:
             return "Gmail is not connected."
-        service = get_gmail_service(gmail_token, gmail_refresh_token, readonly=False)
+        service = get_gmail_service(gmail_token, gmail_refresh_token, readonly=False, on_refresh=on_gmail_refresh)
         original = service.users().messages().get(
             userId="me", id=message_id, format="metadata",
             metadataHeaders=["From", "Subject", "Message-ID"]
@@ -434,8 +436,8 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
         get_slack_dms,
     ]
 
-def run_orchestrator(github_token, gmail_token, gmail_refresh_token, slack_token, message: str):
-    tools = make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token)
+def run_orchestrator(github_token, gmail_token, gmail_refresh_token, slack_token, message: str, on_gmail_refresh: Optional[Callable[[str], None]] = None):
+    tools = make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token, on_gmail_refresh=on_gmail_refresh)
     llm_with_tools = llm.bind_tools(tools)
     tool_map = {t.name: t for t in tools}
 
