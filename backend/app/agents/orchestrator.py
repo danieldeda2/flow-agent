@@ -46,6 +46,10 @@ def get_gmail_service(
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         scopes=[scope]
     )
+    print(f"creds.refresh_token: {bool(creds.refresh_token)}")
+    print(f"creds.expired: {creds.expired}")
+    if token_expired and creds.refresh_token:
+        print("entering refresh block")
     token_expired = expires_at and datetime.utcnow() >= expires_at
     if token_expired and creds.refresh_token:
         creds.refresh(Request())
