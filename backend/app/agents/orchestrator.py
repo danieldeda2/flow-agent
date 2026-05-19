@@ -447,6 +447,12 @@ def make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slac
     ]
 
 def run_orchestrator(github_token, gmail_token, gmail_refresh_token, slack_token, message: str, gmail_expires_at: Optional[datetime] = None, on_gmail_refresh: Optional[Callable[[str, datetime], None]] = None):
+    
+    print(f"run_orchestrator called")
+    print(f"gmail_token present: {bool(gmail_token)}")
+    print(f"gmail_refresh_token present: {bool(gmail_refresh_token)}")
+    print(f"gmail_expires_at: {gmail_expires_at}")
+    
     tools = make_orchestrator_tools(github_token, gmail_token, gmail_refresh_token, slack_token, gmail_expires_at=gmail_expires_at, on_gmail_refresh=on_gmail_refresh)
     llm_with_tools = llm.bind_tools(tools)
     tool_map = {t.name: t for t in tools}
