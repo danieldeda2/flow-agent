@@ -185,7 +185,8 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           description="Email & inbox"
           service={services.google}
           loading={loading}
-          onConnect={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/google/connect?master_email=${encodeURIComponent(session?.user?.email || "")}`}          onDisconnect={() => handleDisconnect("google")}
+          onConnect={() => signIn("google")}
+          onDisconnect={() => handleDisconnect("google")}
         />
         <ServiceCard
           icon={<SlackIcon />}
