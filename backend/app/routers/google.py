@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import User, ProviderToken, ConnectedAccount
 import requests
 import os
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -52,6 +53,7 @@ def google_callback(code: str, state: str, db: Session = Depends(get_db)):
 
     access_token = token_response.get("access_token")
     refresh_token = token_response.get("refresh_token")
+    expires_at = datetime.utcnow() + timedelta(seconds=token_response.get("expires_in", 3600))
 
     if not access_token:
         return {"error": "Failed to get access token", "details": token_response}
@@ -85,12 +87,14 @@ def google_callback(code: str, state: str, db: Session = Depends(get_db)):
     if token:
         token.access_token = access_token
         token.refresh_token = refresh_token
+        token.expires_at = expires_at
     else:
         token = ProviderToken(
             user_id=google_user.id,
             provider="google",
             access_token=access_token,
-            refresh_token=refresh_token
+            refresh_token=refresh_token,
+            expires_at=expires_at
         )
         db.add(token)
 
