@@ -87,4 +87,8 @@ def run_orchestrator_endpoint(request: OrchestratorRequest, db: Session = Depend
         on_gmail_refresh=on_gmail_refresh if gmail_token else None,
     )
 
+    print(f"Gmail expires_at: {gmail_token.expires_at}")
+    print(f"Current time: {datetime.utcnow()}")
+    print(f"Token expired: {datetime.utcnow() >= gmail_token.expires_at}")
+
     return {"response": response}
