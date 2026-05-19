@@ -34,7 +34,7 @@ def get_gmail_service(
     readonly: bool = True,
     on_refresh: Optional[Callable[[str, datetime], None]] = None
 ):
-    scope = "https://www.googleapis.com/auth/gmail.readonly" if readonly else "https://mail.google.com/"
+    scope = "https://mail.google.com/"
     creds = Credentials(
         token=access_token,
         refresh_token=refresh_token,
