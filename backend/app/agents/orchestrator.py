@@ -50,6 +50,7 @@ def get_gmail_service(
         if on_refresh:
             new_expires_at = datetime.utcnow() + timedelta(hours=1)
             on_refresh(creds.token, new_expires_at)
+            print("DB updated with new token")
     return build("gmail", "v1", credentials=creds)
 
 def get_github_username(token: str) -> str:
