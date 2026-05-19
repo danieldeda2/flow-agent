@@ -77,6 +77,10 @@ def run_orchestrator_endpoint(request: OrchestratorRequest, db: Session = Depend
         except Exception as e:
             print(f"Failed to persist refreshed Gmail token: {e}")
 
+    print(f"Gmail expires_at: {gmail_token.expires_at}")
+    print(f"Current time: {datetime.utcnow()}")
+    print(f"Token expired: {datetime.utcnow() >= gmail_token.expires_at}")
+
     response = run_orchestrator(
         github_token=github_token.access_token if github_token else None,
         gmail_token=gmail_token.access_token if gmail_token else None,
@@ -86,9 +90,6 @@ def run_orchestrator_endpoint(request: OrchestratorRequest, db: Session = Depend
         gmail_expires_at=gmail_token.expires_at if gmail_token else None,
         on_gmail_refresh=on_gmail_refresh if gmail_token else None,
     )
-
-    print(f"Gmail expires_at: {gmail_token.expires_at}")
-    print(f"Current time: {datetime.utcnow()}")
-    print(f"Token expired: {datetime.utcnow() >= gmail_token.expires_at}")
+    
 
     return {"response": response}
